@@ -20,41 +20,42 @@ view address model =
     ]
     [
       Html.h1 [] [Html.text "Terminology Editor"],
-      model.rootTermViews |> viewTermViewRefs address model
+      model.rootTermViews |> viewTermViewRefs address model Nothing
     ]
 
-viewTermViewRefs : Address Update -> Model -> List (Reference TermView) -> Html
-viewTermViewRefs address model termViewRefs =
+viewTermViewRefs : Address Update -> Model -> Maybe (Reference TermView) -> List (Reference TermView) -> Html
+viewTermViewRefs address model maybeParentTermViewRef termViewRefs =
   Html.dl
     []
-    (termViewRefs |> List.map (viewTermViewRef address model))
+    (termViewRefs |> List.map (viewTermViewRef address model maybeParentTermViewRef))
 
-viewTermViewRef : Address Update -> Model -> Reference TermView -> Html
-viewTermViewRef address model termViewRef =
+viewTermViewRef : Address Update -> Model -> Maybe (Reference TermView) -> Reference TermView -> Html
+viewTermViewRef address model maybeParentTermViewRef termViewRef =
   termViewRef.get model.termViews
-  |> Maybe.map (viewTermView address model termViewRef.id)
+  |> Maybe.map (viewTermView address model maybeParentTermViewRef termViewRef)
   |> Maybe.withDefault (Html.div [] [Html.text "Referenced term view not found!"])
 
-viewTermView : Address Update -> Model -> Id -> TermView -> Html
-viewTermView address model termViewId (TermView termViewInfo) =
+viewTermView : Address Update -> Model -> Maybe (Reference TermView) -> Reference TermView -> TermView -> Html
+viewTermView address model maybeParentTermViewRef termViewRef (TermView termViewInfo) =
   termViewInfo.term.get model.terms
-  |> Maybe.map (viewTerm address model termViewId (TermView termViewInfo))
+  |> Maybe.map (viewTerm address model maybeParentTermViewRef termViewRef (TermView termViewInfo))
   |> Maybe.withDefault (Html.div [] [Html.text "Referenced term not found!"])
 
-viewTerm : Address Update -> Model -> Id -> TermView -> Term -> Html
-viewTerm address model termViewId termView (Term termInfo) =
+viewTerm : Address Update -> Model -> Maybe (Reference TermView) -> Reference TermView -> TermView -> Term -> Html
+viewTerm address model maybeParentTermViewRef termViewRef termView (Term termInfo) =
   let result =
         Html.div
           [
             Attributes.style [
               ("display", "table"),
-              ("padding", "2px"),
+              ("padding", "5px"),
               ("margin", "5px"),
               ("border-radius", "2px"),
               ("box-shadow", "0px 0px 2px 2px #aaaaaa")
             ]
           ]
           [
+            close,
             name,
             definition,
             relatedTerms
@@ -62,9 +63,19 @@ viewTerm address model termViewId termView (Term termInfo) =
       name =
         termInfo.name |> viewName
       definition =
-        termInfo.definition |> viewDefinition address model termViewId termView
+        termInfo.definition |> viewDefinition address model termViewRef termView
       relatedTerms =
-        termView |> termViewInfo |> .related |> viewRelated address model
+        termView |> termViewInfo |> .related |> viewRelated address model termViewRef
+      close =
+        Html.img
+          [
+            Attributes.src "https://upload.wikimedia.org/wikipedia/commons/f/f8/Tooltip-CloseButton.png",
+            Events.onClick address (closeTermView maybeParentTermViewRef termViewRef),
+            Attributes.style [
+              ("float", "right")
+            ]
+          ]
+          []
   in result
 
 viewName : String -> Html
@@ -77,21 +88,21 @@ viewName name =
     ]
     [Html.text name]
 
-viewDefinition : Address Update -> Model -> Id -> TermView -> Definition -> Html
-viewDefinition address model termViewId termView definition =
+viewDefinition : Address Update -> Model -> Reference TermView -> TermView -> Definition -> Html
+viewDefinition address model termViewRef termView definition =
   Html.dt
     []
-    (definition |> List.map (viewSegment address model termViewId termView))
+    (definition |> List.map (viewSegment address model termViewRef termView))
 
-viewSegment : Address Update -> Model -> Id -> TermView -> Segment -> Html
-viewSegment address model termViewId termView segment =
+viewSegment : Address Update -> Model -> Reference TermView -> TermView -> Segment -> Html
+viewSegment address model termViewRef termView segment =
   case segment of
     Text text ->
       Html.text text
     TermReference relatedTermRef ->
       let result =
             Html.a
-              [Events.onClick address (openTerm termViewId termView relatedTermRef)]
+              [Events.onClick address (openTerm termViewRef termView relatedTermRef)]
               [
                 Html.abbr
                   [Attributes.title relatedTermDefinition]
@@ -128,8 +139,8 @@ showRelatedTermName model relatedTermRef =
   |> Maybe.map .name
   |> Maybe.withDefault "(not found)"
 
-viewRelated : Address Update -> Model -> List (Reference TermView) -> Html
-viewRelated address model related =
+viewRelated : Address Update -> Model -> Reference TermView -> List (Reference TermView) -> Html
+viewRelated address model parentTermViewRef related =
   let result =
         Html.div
           []
@@ -144,5 +155,5 @@ viewRelated address model related =
               [Html.text "where"]
           ]
       relatedTermViews =
-        related |> viewTermViewRefs address model
+        related |> viewTermViewRefs address model (Just parentTermViewRef)
   in result
