@@ -10,34 +10,54 @@ noOp : Update
 noOp model =
   model
 
-openTerm : Reference TermView -> TermView -> Reference Term -> Update
-openTerm parentTermViewRef (TermView parentTermViewInfo) relatedTermRef model =
+setInputText : String -> Update
+setInputText newInputText model =
+  { model |
+    inputText <-
+      newInputText
+  }
+
+openTermView : Maybe (Reference TermView) -> Reference Term -> Update
+openTermView maybeParentTermViewRef relatedTermRef model =
   let result =
-        { model |
-          termViews <-
-            termViewInserted.newTable |> update parentTermViewRef.id (Just updatedParentTermView)
-        }
+        case maybeParentTermViewRef of
+          Nothing ->
+            { model |
+              termViews <-
+                termViewInserted.newTable,
+              rootTermViews <-
+                model.rootTermViews ++ [termViewInserted.newReference],
+              inputText <-
+                ""
+            }
+          Just parentTermViewRef ->
+            case parentTermViewRef.get model.termViews of
+              Nothing ->
+                model
+              Just (TermView parentTermViewInfo) ->
+                let result =
+                      { model |
+                        termViews <-
+                          termViewInserted.newTable |> update parentTermViewRef.id (Just updatedParentTermView)
+                      }
+                    updatedParentTermView =
+                      TermView { parentTermViewInfo |
+                        related <-
+                          parentTermViewInfo.related ++ [termViewInserted.newReference]
+                      }
+                in result
       termViewInserted =
         model.termViews |> insert (termView relatedTermRef)
-      updatedParentTermView =
-        TermView { parentTermViewInfo |
-          related <-
-            parentTermViewInfo.related ++ [termViewInserted.newReference]
-        }
   in result
 
 closeTermView : Maybe (Reference TermView) -> Reference TermView -> Update
 closeTermView maybeParentTermViewRef termViewRef model =
   case maybeParentTermViewRef of
     Nothing ->
-      let result =
-            { model |
-              rootTermViews <-
-                updatedRootTermViews
-            }
-          updatedRootTermViews =
-            model.rootTermViews |> remove termViewRef
-      in result
+      { model |
+        rootTermViews <-
+          model.rootTermViews |> remove termViewRef
+      }
     Just parentTermViewRef ->
       let result =
             { model |

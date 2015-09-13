@@ -6,7 +6,8 @@ type alias Model =
   {
     terms: Table Term,
     termViews: Table TermView,
-    rootTermViews: List (Reference TermView)
+    rootTermViews: List (Reference TermView),
+    inputText: String
   }
 
 type Term =
@@ -51,7 +52,9 @@ initialModel =
           termViews =
             fooViewInserted.newTable,
           rootTermViews =
-            [fooViewInserted.newReference]
+            [],
+          inputText =
+            ""
         }
       bazInserted = empty |> insert baz
       barInserted = bazInserted.newTable |> insert (bar bazInserted.newReference)

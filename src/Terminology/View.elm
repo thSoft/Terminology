@@ -3,6 +3,8 @@ module Terminology.View where
 import String
 import Dict exposing (Dict)
 import Signal exposing (Address)
+import Json.Decode as Decode
+import Result
 import Html exposing (Html)
 import Html.Events as Events
 import Html.Attributes as Attributes
@@ -20,7 +22,8 @@ view address model =
     ]
     [
       Html.h1 [] [Html.text "Terminology Editor"],
-      model.rootTermViews |> viewTermViewRefs address model Nothing
+      model.rootTermViews |> viewTermViewRefs address model Nothing,
+      commandBar address model
     ]
 
 viewTermViewRefs : Address Update -> Model -> Maybe (Reference TermView) -> List (Reference TermView) -> Html
@@ -63,7 +66,7 @@ viewTerm address model maybeParentTermViewRef termViewRef termView (Term termInf
       name =
         termInfo.name |> viewName
       definition =
-        termInfo.definition |> viewDefinition address model termViewRef termView
+        termInfo.definition |> viewDefinition address model termViewRef
       relatedTerms =
         termView |> termViewInfo |> .related |> viewRelated address model termViewRef
       close =
@@ -88,24 +91,31 @@ viewName name =
     ]
     [Html.text name]
 
-viewDefinition : Address Update -> Model -> Reference TermView -> TermView -> Definition -> Html
-viewDefinition address model termViewRef termView definition =
+viewDefinition : Address Update -> Model -> Reference TermView -> Definition -> Html
+viewDefinition address model termViewRef definition =
   Html.dt
     []
-    (definition |> List.map (viewSegment address model termViewRef termView))
+    (definition |> List.map (viewSegment address model termViewRef))
 
-viewSegment : Address Update -> Model -> Reference TermView -> TermView -> Segment -> Html
-viewSegment address model termViewRef termView segment =
+viewSegment : Address Update -> Model -> Reference TermView -> Segment -> Html
+viewSegment address model termViewRef segment =
   case segment of
     Text text ->
       Html.text text
     TermReference relatedTermRef ->
       let result =
             Html.a
-              [Events.onClick address (openTerm termViewRef termView relatedTermRef)]
+              [Events.onClick address (openTermView (Just termViewRef) relatedTermRef)]
               [
                 Html.abbr
-                  [Attributes.title relatedTermDefinition]
+                  [
+                    Attributes.title relatedTermDefinition,
+                    Attributes.style [
+                      ("cursor", "pointer"),
+                      ("text-decoration", "underline"),
+                      ("text-decoration-style", "dotted")
+                    ]
+                  ]
                   [Html.text relatedTermName]
               ]
           relatedTermDefinition = relatedTermRef |> showRelatedTermDefinition model
@@ -156,4 +166,44 @@ viewRelated address model parentTermViewRef related =
           ]
       relatedTermViews =
         related |> viewTermViewRefs address model (Just parentTermViewRef)
+  in result
+
+commandBar : Address Update -> Model -> Html
+commandBar address model =
+  let result =
+        Html.div
+          []
+          [
+            input,
+            menu
+          ]
+      input =
+        Html.input
+          [
+            Attributes.attribute "list" datalistId,
+            Attributes.placeholder "Open term",
+            Attributes.value model.inputText,
+            Events.on "input" Events.targetValue inputTextChanged
+          ]
+          []
+      datalistId =
+        "commands"
+      inputTextChanged newInputText =
+        newInputText
+        |> String.toInt
+        |> Result.toMaybe
+        |> Maybe.map openTermViewMessage
+        |> Maybe.withDefault (Signal.message address (setInputText newInputText))
+      openTermViewMessage id =
+        Signal.message address (openTermView Nothing (id |> reference))
+      menu =
+        Html.datalist
+          [Attributes.id datalistId]
+          options
+      options =
+        model.terms.rows |> Dict.toList |> List.map (\(id, Term termInfo) ->
+          Html.option
+            [Attributes.value (id |> toString)]
+            ["Open " ++ termInfo.name |> Html.text]
+        )
   in result
