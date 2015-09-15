@@ -57,14 +57,14 @@ setInputText inputText' props state =
 
 moveToNext : Update
 moveToNext props state =
-  moveSelectionBy 1 props state
+  moveBy 1 props state
 
 moveToPrevious : Update
 moveToPrevious props state =
-  moveSelectionBy -1 props state
+  moveBy -1 props state
 
-moveSelectionBy : Int -> Update
-moveSelectionBy delta props state =
+moveBy : Int -> Update
+moveBy delta props state =
   let result =
         if visibleItems |> List.isEmpty then
           state
