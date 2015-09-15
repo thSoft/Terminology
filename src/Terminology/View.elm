@@ -180,16 +180,36 @@ viewCommandInput address model =
           items =
             model |> getItems address,
           inputAttributes = [
-            Attributes.placeholder "Open term"
+            Attributes.placeholder "Open or create term"
           ]
         }
   in result
 
 getItems : Address Update -> Model -> List Combobox.Item
 getItems address model =
-  model.terms.rows |> Dict.toList |> List.map (\(id, Term termInfo) ->
-    {
-      label = "Open " ++ termInfo.name,
-      message = Just (openTermView Nothing (id |> reference) |> Signal.message address)
-    }
-  )
+  let result =
+        create ++ open
+      create =
+        if model.terms.rows |> Dict.values |> List.any (\(Term termInfo) ->
+          termInfo.name == model.commandInput.inputText
+        ) then
+          []
+        else
+          [
+            {
+              label =
+                "Create " ++ model.commandInput.inputText,
+              message =
+                Just (createTerm model.commandInput.inputText |> Signal.message address)
+            }
+          ]
+      open =
+        model.terms.rows |> Dict.toList |> List.map (\(id, Term termInfo) ->
+          {
+            label =
+              "Open " ++ termInfo.name,
+            message =
+              Just (openTermView Nothing (id |> reference) |> Signal.message address)
+          }
+        )
+  in result

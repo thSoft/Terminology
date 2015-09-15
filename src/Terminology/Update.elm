@@ -82,3 +82,16 @@ closeTermView maybeParentTermViewRef termViewRef model =
 remove : a -> List a -> List a
 remove element list =
   list |> List.filter (\elem -> elem /= element)
+
+createTerm : String -> Update
+createTerm name model =
+  let result =
+        modelWithTerm |> openTermView Nothing termInserted.newReference
+      modelWithTerm =
+        { model |
+          terms <-
+            termInserted.newTable
+        }
+      termInserted =
+        model.terms |> insert (term name)
+  in result

@@ -106,3 +106,10 @@ termView termRef =
     term = termRef,
     related = []
   }
+
+term : String -> Term
+term name =
+  Term {
+    name = name,
+    definition = []
+  }
