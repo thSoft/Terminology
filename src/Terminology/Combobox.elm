@@ -2,6 +2,7 @@ module Terminology.Combobox where
 
 import Array
 import String
+import Regex
 import Signal exposing (Address, Message)
 import Json.Decode as Decode
 import Html exposing (Html)
@@ -54,12 +55,12 @@ setInputText inputText' props state =
       inputText'
   }
 
-next : Update
-next props state =
+moveToNext : Update
+moveToNext props state =
   moveSelectionBy 1 props state
 
-previous : Update
-previous props state =
+moveToPrevious : Update
+moveToPrevious props state =
   moveSelectionBy -1 props state
 
 moveSelectionBy : Int -> Update
@@ -76,15 +77,15 @@ moveSelectionBy delta props state =
         getVisibleItems props state
   in result
 
-first : Update
-first props state =
+moveToFirst : Update
+moveToFirst props state =
   { state |
     selectedIndex <-
       0
   }
 
-last : Update
-last props state =
+moveToLast : Update
+moveToLast props state =
   { state |
     selectedIndex <-
       (getVisibleItems props state |> List.length) - 1
@@ -109,8 +110,10 @@ view address props state =
           ] ++ props.inputAttributes)
           []
       handleKeyPress key =
-        if | key == (Keys.arrowDown |> .keyCode) -> next |> Signal.message address
-           | key == (Keys.arrowUp |> .keyCode) -> previous |> Signal.message address
+        if | key == (Keys.arrowDown |> .keyCode) -> moveToNext |> Signal.message address
+           | key == (Keys.arrowUp |> .keyCode) -> moveToPrevious |> Signal.message address
+           | key == (Keys.pageDown |> .keyCode) -> moveToLast |> Signal.message address
+           | key == (Keys.pageUp |> .keyCode) -> moveToFirst |> Signal.message address
            | key == (Keys.enter |> .keyCode) ->
              (visibleItems
              |> Array.fromList
@@ -168,5 +171,18 @@ view address props state =
 getVisibleItems : Props -> State -> List Item
 getVisibleItems props state =
   props.items |> List.filter (\item ->
-    item.label |> String.contains state.inputText
+    item.label |> fuzzyContains state.inputText
   )
+
+fuzzyContains : String -> String -> Bool
+fuzzyContains needle haystack =
+  needle |> String.words |> List.all (\word ->
+    if word |> String.isEmpty then
+      False
+    else
+      haystack |> containsIgnoreCase word
+  )
+
+containsIgnoreCase : String -> String -> Bool
+containsIgnoreCase needle haystack =
+  haystack |> Regex.contains (needle |> Regex.escape |> Regex.regex |> Regex.caseInsensitive)
