@@ -11,6 +11,7 @@ import Html.Attributes as Attributes
 import Terminology.Table exposing (..)
 import Terminology.Model exposing (..)
 import Terminology.Update exposing (..)
+import Terminology.Combobox as Combobox
 
 view : Address Update -> Model -> Html
 view address model =
@@ -23,7 +24,7 @@ view address model =
     [
       Html.h1 [] [Html.text "Terminology Editor"],
       model.rootTermViews |> viewTermViewRefs address model Nothing,
-      commandBar address model
+      viewCommandInput address model
     ]
 
 viewTermViewRefs : Address Update -> Model -> Maybe (Reference TermView) -> List (Reference TermView) -> Html
@@ -168,42 +169,27 @@ viewRelated address model parentTermViewRef related =
         related |> viewTermViewRefs address model (Just parentTermViewRef)
   in result
 
-commandBar : Address Update -> Model -> Html
-commandBar address model =
+viewCommandInput : Address Update -> Model -> Html
+viewCommandInput address model =
   let result =
-        Html.div
-          []
-          [
-            input,
-            menu
+        Combobox.view comboboxAddress props model.commandInput
+      comboboxAddress =
+        updateCommandInput props |> Signal.forwardTo address
+      props =
+        {
+          items =
+            model |> getItems address,
+          inputAttributes = [
+            Attributes.placeholder "Open term"
           ]
-      input =
-        Html.input
-          [
-            Attributes.attribute "list" datalistId,
-            Attributes.placeholder "Open term",
-            Attributes.value model.inputText,
-            Events.on "input" Events.targetValue inputTextChanged
-          ]
-          []
-      datalistId =
-        "commands"
-      inputTextChanged newInputText =
-        newInputText
-        |> String.toInt
-        |> Result.toMaybe
-        |> Maybe.map openTermViewMessage
-        |> Maybe.withDefault (Signal.message address (setInputText newInputText))
-      openTermViewMessage id =
-        Signal.message address (openTermView Nothing (id |> reference))
-      menu =
-        Html.datalist
-          [Attributes.id datalistId]
-          options
-      options =
-        model.terms.rows |> Dict.toList |> List.map (\(id, Term termInfo) ->
-          Html.option
-            [Attributes.value (id |> toString)]
-            ["Open " ++ termInfo.name |> Html.text]
-        )
+        }
   in result
+
+getItems : Address Update -> Model -> List Combobox.Item
+getItems address model =
+  model.terms.rows |> Dict.toList |> List.map (\(id, Term termInfo) ->
+    {
+      label = "Open " ++ termInfo.name,
+      message = Just (openTermView Nothing (id |> reference) |> Signal.message address)
+    }
+  )

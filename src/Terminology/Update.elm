@@ -2,19 +2,16 @@ module Terminology.Update where
 
 import Terminology.Table exposing (..)
 import Terminology.Model exposing (..)
+import Terminology.Combobox as Combobox
 
 type alias Update =
   Model -> Model
 
-noOp : Update
-noOp model =
-  model
-
-setInputText : String -> Update
-setInputText newInputText model =
+updateCommandInput : Combobox.Props -> Combobox.Update -> Update
+updateCommandInput props comboboxUpdate model =
   { model |
-    inputText <-
-      newInputText
+    commandInput <-
+      model.commandInput |> comboboxUpdate props
   }
 
 openTermView : Maybe (Reference TermView) -> Reference Term -> Update
@@ -22,14 +19,21 @@ openTermView maybeParentTermViewRef relatedTermRef model =
   let result =
         case maybeParentTermViewRef of
           Nothing ->
-            { model |
-              termViews <-
-                termViewInserted.newTable,
-              rootTermViews <-
-                model.rootTermViews ++ [termViewInserted.newReference],
-              inputText <-
-                ""
-            }
+            let result =
+                  { model |
+                    termViews <-
+                      termViewInserted.newTable,
+                    rootTermViews <-
+                      model.rootTermViews ++ [termViewInserted.newReference],
+                    commandInput <-
+                      { oldCommandInput |
+                        inputText <-
+                          ""
+                      }
+                  }
+                oldCommandInput =
+                  model.commandInput
+            in result
           Just parentTermViewRef ->
             case parentTermViewRef.get model.termViews of
               Nothing ->

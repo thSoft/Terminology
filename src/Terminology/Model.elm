@@ -1,13 +1,14 @@
 module Terminology.Model where
 
 import Terminology.Table exposing (..)
+import Terminology.Combobox as Combobox
 
 type alias Model =
   {
     terms: Table Term,
     termViews: Table TermView,
     rootTermViews: List (Reference TermView),
-    inputText: String
+    commandInput: Combobox.State
   }
 
 type Term =
@@ -48,18 +49,24 @@ initialModel =
   let result =
         {
           terms =
-            fooInserted.newTable,
+            terms,
           termViews =
             fooViewInserted.newTable,
           rootTermViews =
             [],
-          inputText =
-            ""
+          commandInput =
+            Combobox.initialState
         }
-      bazInserted = empty |> insert baz
-      barInserted = bazInserted.newTable |> insert (bar bazInserted.newReference)
-      fooInserted = barInserted.newTable |> insert (foo barInserted.newReference)
-      fooViewInserted = empty |> insert (termView fooInserted.newReference)
+      terms =
+        fooInserted.newTable
+      bazInserted =
+        empty |> insert baz
+      barInserted =
+        bazInserted.newTable |> insert (bar bazInserted.newReference)
+      fooInserted =
+        barInserted.newTable |> insert (foo barInserted.newReference)
+      fooViewInserted =
+        empty |> insert (termView fooInserted.newReference)
   in result
 
 foo : Reference Term -> Term

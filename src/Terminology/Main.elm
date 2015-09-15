@@ -15,4 +15,4 @@ modelState =
 
 updates : Signal.Mailbox Update
 updates =
-  Signal.mailbox noOp
+  Signal.mailbox identity
