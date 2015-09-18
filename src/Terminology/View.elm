@@ -46,7 +46,7 @@ viewTermView address model maybeParentTermViewRef termViewRef (TermView termView
   |> Maybe.withDefault (Html.div [] [Html.text "Referenced term not found!"])
 
 viewTerm : Address Update -> Model -> Maybe (Reference TermView) -> Reference TermView -> TermView -> Term -> Html
-viewTerm address model maybeParentTermViewRef termViewRef termView (Term termInfo) =
+viewTerm address model maybeParentTermViewRef termViewRef (TermView termViewInfo) (Term termInfo) =
   let result =
         Html.div
           [
@@ -60,6 +60,7 @@ viewTerm address model maybeParentTermViewRef termViewRef termView (Term termInf
           ]
           [
             close,
+            delete,
             name,
             definition,
             relatedTerms
@@ -69,11 +70,23 @@ viewTerm address model maybeParentTermViewRef termViewRef termView (Term termInf
       definition =
         termInfo.definition |> viewDefinition address model termViewRef
       relatedTerms =
-        termView |> termViewInfo |> .related |> viewRelated address model termViewRef
+        termViewInfo |> .related |> viewRelated address model termViewRef
+      delete =
+        Html.img
+          [
+            Attributes.src "http://iconshow.me/media/images/Mixed/line-icon/png/16/trash-16.png",
+            Attributes.title "Delete",
+            Events.onClick address (deleteTerm maybeParentTermViewRef termViewRef),
+            Attributes.style [
+              ("float", "right")
+            ]
+          ]
+          []
       close =
         Html.img
           [
             Attributes.src "https://upload.wikimedia.org/wikipedia/commons/f/f8/Tooltip-CloseButton.png",
+            Attributes.title "Close",
             Events.onClick address (closeTermView maybeParentTermViewRef termViewRef),
             Attributes.style [
               ("float", "right")
@@ -129,7 +142,11 @@ showRelatedTermDefinition model relatedTermRef =
   |> Maybe.map termInfo
   |> Maybe.map .definition
   |> Maybe.map (showDefinition model)
-  |> Maybe.withDefault "(not found)"
+  |> Maybe.withDefault unknownTermLabel
+
+unknownTermLabel : String
+unknownTermLabel =
+  "(unknown term)"
 
 showDefinition : Model -> Definition -> String
 showDefinition model definition =
@@ -148,7 +165,7 @@ showRelatedTermName model relatedTermRef =
   relatedTermRef.get model.terms
   |> Maybe.map termInfo
   |> Maybe.map .name
-  |> Maybe.withDefault "(not found)"
+  |> Maybe.withDefault unknownTermLabel
 
 viewRelated : Address Update -> Model -> Reference TermView -> List (Reference TermView) -> Html
 viewRelated address model parentTermViewRef related =

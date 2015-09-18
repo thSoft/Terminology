@@ -95,3 +95,18 @@ createTerm name model =
       termInserted =
         model.terms |> insert (term name)
   in result
+
+deleteTerm : Maybe (Reference TermView) -> Reference TermView -> Update
+deleteTerm maybeParentTermViewRef termViewRef model =
+  case termViewRef.get model.termViews of
+    Nothing ->
+      model
+    Just (TermView termViewInfo) ->
+      let result =
+            modelWithoutTerm |> closeTermView maybeParentTermViewRef termViewRef
+          modelWithoutTerm =
+            { model |
+              terms <-
+                model.terms |> Table.remove termViewInfo.term
+            }
+      in result
