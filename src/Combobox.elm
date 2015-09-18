@@ -1,4 +1,4 @@
-module Terminology.Combobox where
+module Combobox where
 
 import Array
 import String

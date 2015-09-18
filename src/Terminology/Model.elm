@@ -1,7 +1,7 @@
 module Terminology.Model where
 
-import Terminology.Table exposing (..)
-import Terminology.Combobox as Combobox
+import Table exposing (..)
+import Combobox
 
 type alias Model =
   {

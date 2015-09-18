@@ -1,4 +1,4 @@
-module Terminology.Table where
+module Table where
 
 import Dict exposing (Dict)
 
@@ -45,6 +45,13 @@ update id maybeRow table =
   { table |
     rows <-
       table.rows |> Dict.update id (always maybeRow)
+  }
+
+remove : Reference a -> Table a -> Table a
+remove reference table =
+  { table |
+    rows <-
+      table.rows |> Dict.remove reference.id
   }
 
 type alias Reference a =

@@ -1,8 +1,8 @@
 module Terminology.Update where
 
-import Terminology.Table exposing (..)
+import Table exposing (..)
 import Terminology.Model exposing (..)
-import Terminology.Combobox as Combobox
+import Combobox
 
 type alias Update =
   Model -> Model

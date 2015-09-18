@@ -8,10 +8,10 @@ import Result
 import Html exposing (Html)
 import Html.Events as Events
 import Html.Attributes as Attributes
-import Terminology.Table exposing (..)
+import Table exposing (..)
 import Terminology.Model exposing (..)
 import Terminology.Update exposing (..)
-import Terminology.Combobox as Combobox
+import Combobox
 
 view : Address Update -> Model -> Html
 view address model =
