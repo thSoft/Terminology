@@ -3,10 +3,14 @@
 require('shelljs/global');
 var paths = require('./paths.js');
 
-rm('-rf', paths.target);
-make(paths.sourceMainRoot, paths.targetMainRoot);
+build();
+
+function build() {
+  rm('-rf', paths.target);
+  make(paths.sourceMainRoot, paths.targetMainRoot);  
+}
 
 function make(source, target) {
-  cd(paths.build);
+  cd(paths.root);
   exec('elm-make --yes ' + source + ' --output ' + target);
 }

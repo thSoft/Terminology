@@ -4,6 +4,7 @@ require('shelljs/global');
 var path = require('path');
 var watch = require('node-watch');
 var paths = require('./paths.js');
+var builder = require('./build');
 
 build();
 watch([paths.sourceElm, paths.elmPackage], function (event, filename) {
@@ -12,7 +13,7 @@ watch([paths.sourceElm, paths.elmPackage], function (event, filename) {
 
 function build() {
   clearScreen();
-  exec(path.join(paths.build, 'build'));
+  builder.build();
 }
 
 function clearScreen() {
