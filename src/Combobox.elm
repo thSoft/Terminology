@@ -3,30 +3,45 @@ module Combobox where
 import Array
 import String
 import Regex
+import Time
 import Signal exposing (Address, Message)
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
-import Keyboard.Keys as Keys
+import Task exposing (Task)
+import Task.Extra
+import Effects exposing (Effects, Never)
+import Keyboard.Keys exposing (..)
+
+-- TODOs
+-- feature: highlight occurrences
+-- feature: description for items
 
 -- Model
 
 type alias Props =
   {
     items: List Item,
-    inputAttributes: List Html.Attribute
+    style: Style,
+    htmlAttributes: List Html.Attribute
   }
 
 type alias Item =
   {
     label: String,
-    message: Maybe Message
+    task: Task Never ()
   }
+
+type Style =
+  Input |
+  ContentEditable
 
 type alias State =
   {
     inputText: String,
+    contentShouldBeSet: Bool,
     selectedIndex: Int
   }
 
@@ -35,35 +50,76 @@ initialState =
   {
     inputText =
       "",
+    contentShouldBeSet =
+      False,
     selectedIndex =
       0
   }
 
 -- Update
 
-type alias Update =
+type Action =
+  Action {
+    updateState: UpdateState,
+    effects: Effects Action
+  }
+
+type alias UpdateState =
   Props -> State -> State
 
-noOp : Update
+action : UpdateState -> Action
+action updateState =
+  Action {
+    updateState =
+      updateState,
+    effects =
+      Effects.none
+  }
+
+choose : Item -> Action
+choose item =
+  Action {
+    updateState =
+      setInputText True "",
+    effects =
+      item.task
+      |> Task.map (\_ -> setInputText False "" |> action)
+      |> Task.Extra.delay (50 * Time.millisecond) -- XXX to avoid race condition of tasks and rendering?
+      |> Effects.task
+  }
+
+update : Action -> Props -> State -> (State, Effects Action)
+update (Action action) props state =
+  let updatedState =
+        state |> action.updateState props
+      effects =
+        action.effects
+  in (updatedState, effects)
+
+noOp : UpdateState
 noOp props state =
   state
 
-setInputText : String -> Update
-setInputText inputText' props state =
+setInputText : Bool -> String -> UpdateState
+setInputText contentShouldBeSet inputText props state =
   { state |
     inputText <-
-      inputText'
+      inputText,
+    contentShouldBeSet <-
+      contentShouldBeSet,
+    selectedIndex <-
+      0
   }
 
-moveToNext : Update
+moveToNext : UpdateState
 moveToNext props state =
   moveBy 1 props state
 
-moveToPrevious : Update
+moveToPrevious : UpdateState
 moveToPrevious props state =
   moveBy -1 props state
 
-moveBy : Int -> Update
+moveBy : Int -> UpdateState
 moveBy delta props state =
   let result =
         if visibleItems |> List.isEmpty then
@@ -77,14 +133,14 @@ moveBy delta props state =
         getVisibleItems props state
   in result
 
-moveToFirst : Update
+moveToFirst : UpdateState
 moveToFirst props state =
   { state |
     selectedIndex <-
       0
   }
 
-moveToLast : Update
+moveToLast : UpdateState
 moveToLast props state =
   { state |
     selectedIndex <-
@@ -93,36 +149,57 @@ moveToLast props state =
 
 -- View
 
-view : Address Update -> Props -> State -> Html
+view : Address Action -> Props -> State -> Html
 view address props state =
   let result =
-        Html.div
+        Html.span
           []
           (input :: menu)
       input =
-        Html.input
-          ([
-            Attributes.value state.inputText,
-            Events.on "input" Events.targetValue (\inputText' ->
-              Signal.message address (setInputText inputText')
-            ),
-            Events.on "keydown" Events.keyCode handleKeyPress
-          ] ++ props.inputAttributes)
+        case props.style of
+          Input ->
+            Html.input
+              attributes
+              []
+          ContentEditable ->
+            Html.span
+              (Attributes.contenteditable True :: attributes)
+              []
+      attributes =
+        (eventHandlers ++ textContent ++ props.htmlAttributes)
+      eventHandlers =
+        [
+          Attributes.attribute "onkeydown"
+            "if ([13, 38, 40].indexOf(event.keyCode) > -1) {
+              event.preventDefault();
+            }", -- XXX https://github.com/evancz/elm-html/issues/83
+          Events.on "input" (inputTextDecoder props.style) handleInput,
+          Events.on "keyup" Events.keyCode handleKeyUp
+        ]
+      submitAction =
+        (visibleItems |> Array.fromList |> Array.get state.selectedIndex)
+        |> Maybe.map (\selectedItem -> choose selectedItem)
+        |> Maybe.withDefault (noOp |> action)
+      handleKeyUp key =
+        let updateState =
+              if | key == arrowDown.keyCode -> moveToNext |> action
+                 | key == arrowUp.keyCode -> moveToPrevious |> action
+                 | key == pageDown.keyCode -> moveToLast |> action
+                 | key == pageUp.keyCode -> moveToFirst |> action
+                 | key == enter.keyCode -> submitAction
+                 | otherwise -> noOp |> action
+        in updateState |> Signal.message address
+      handleInput inputText =
+        setInputText False inputText |> action |> Signal.message address
+      textContent =
+        if state.contentShouldBeSet then
+          case props.style of
+            Input ->
+              [Attributes.value state.inputText]
+            ContentEditable ->
+              [Attributes.property "textContent" (state.inputText |> Encode.string)]
+        else
           []
-      handleKeyPress key =
-        if | key == (Keys.arrowDown |> .keyCode) -> moveToNext |> Signal.message address
-           | key == (Keys.arrowUp |> .keyCode) -> moveToPrevious |> Signal.message address
-           | key == (Keys.pageDown |> .keyCode) -> moveToLast |> Signal.message address
-           | key == (Keys.pageUp |> .keyCode) -> moveToFirst |> Signal.message address
-           | key == (Keys.enter |> .keyCode) ->
-             (visibleItems
-             |> Array.fromList
-             |> Array.get state.selectedIndex)
-             `Maybe.andThen` .message
-             |> Maybe.withDefault noOpMessage
-           | otherwise -> noOpMessage
-      noOpMessage =
-        noOp |> Signal.message address
       menu =
         if items |> List.isEmpty then
           []
@@ -147,26 +224,34 @@ view address props state =
             Html.div
               [
                 Attributes.style (
-                  selectedStyle (index == state.selectedIndex)
-                  ++ [("padding", "2px")]),
-                Events.on "click" (Decode.succeed ()) (always (handleClick item))
+                  ("padding", "2px") ::
+                  (selectedStyle (index == state.selectedIndex))
+                ),
+                Events.onClick address (choose item)
               ]
               [
                 Html.text item.label
               ]
           )
-      handleClick item =
-        item.message |> Maybe.withDefault noOpMessage
       visibleItems =
         getVisibleItems props state
       selectedStyle selected =
         if selected then
           [
             ("background", "linear-gradient(to bottom, #0066ee, #0033cc)"),
-            ("color", "white")]
+            ("color", "white")
+          ]
         else
           []
  in result
+
+inputTextDecoder : Style -> Decoder String
+inputTextDecoder style =
+  case style of
+    Input ->
+      Events.targetValue
+    ContentEditable ->
+      Decode.at ["target", "textContent"] Decode.string
 
 getVisibleItems : Props -> State -> List Item
 getVisibleItems props state =

@@ -1,20 +1,82 @@
 module Terminology.Update where
 
+import Effects exposing (Effects)
 import Table exposing (..)
-import Terminology.Model exposing (..)
 import Combobox
+import Terminology.Model exposing (..)
 
-type alias Update =
-  Model -> Model
+type alias Action =
+  Model -> ActionResult
 
-updateCommandInput : Combobox.Props -> Combobox.Update -> Update
-updateCommandInput props comboboxUpdate model =
-  { model |
-    commandInput <-
-      model.commandInput |> comboboxUpdate props
+type ActionResult =
+  ActionResult {
+    updatedModel: Model,
+    effects: Effects Action
   }
 
-openTermView : Maybe (Reference TermView) -> Reference Term -> Update
+type alias UpdateModel =
+  Model -> Model
+
+action : UpdateModel -> Action
+action updateModel model =
+  ActionResult {
+    updatedModel =
+      model |> updateModel,
+    effects =
+      Effects.none
+  }
+
+updateCommandInput : Combobox.Props -> Combobox.Action -> Action
+updateCommandInput comboboxProps comboboxAction model =
+  let (updatedCommandInput, comboboxEffects) =
+        model.commandInput |> Combobox.update comboboxAction comboboxProps
+      updatedModel =
+        { model | commandInput <- updatedCommandInput }
+      effects =
+        comboboxEffects |> Effects.map (\nextComboboxAction ->
+          nextComboboxAction |> updateCommandInput comboboxProps
+        )
+  in
+    ActionResult {
+      updatedModel = updatedModel,
+      effects = effects
+    }
+
+update : Action -> Model -> (Model, Effects Action)
+update action model =
+  let (ActionResult { updatedModel, effects }) =
+        model |> action
+  in (updatedModel, effects)
+
+createTerm : String -> UpdateModel
+createTerm name model =
+  let result =
+        modelWithTerm |> openTermView Nothing termInserted.newReference
+      modelWithTerm =
+        { model |
+          terms <-
+            termInserted.newTable
+        }
+      termInserted =
+        model.terms |> insert (term name)
+  in result
+
+deleteTerm : Maybe (Reference TermView) -> Reference TermView -> UpdateModel
+deleteTerm maybeParentTermViewRef termViewRef model =
+  case termViewRef.get model.termViews of
+    Nothing ->
+      model
+    Just (TermView termViewInfo) ->
+      let result =
+            modelWithoutTerm |> closeTermView maybeParentTermViewRef termViewRef
+          modelWithoutTerm =
+            { model |
+              terms <-
+                model.terms |> Table.remove termViewInfo.term
+            }
+      in result
+
+openTermView : Maybe (Reference TermView) -> Reference Term -> UpdateModel
 openTermView maybeParentTermViewRef relatedTermRef model =
   let result =
         case maybeParentTermViewRef of
@@ -42,7 +104,7 @@ openTermView maybeParentTermViewRef relatedTermRef model =
                 let result =
                       { model |
                         termViews <-
-                          termViewInserted.newTable |> update parentTermViewRef.id (Just updatedParentTermView)
+                          termViewInserted.newTable |> Table.update parentTermViewRef.id (Just updatedParentTermView)
                       }
                     updatedParentTermView =
                       TermView { parentTermViewInfo |
@@ -54,7 +116,7 @@ openTermView maybeParentTermViewRef relatedTermRef model =
         model.termViews |> insert (termView relatedTermRef)
   in result
 
-closeTermView : Maybe (Reference TermView) -> Reference TermView -> Update
+closeTermView : Maybe (Reference TermView) -> Reference TermView -> UpdateModel
 closeTermView maybeParentTermViewRef termViewRef model =
   case maybeParentTermViewRef of
     Nothing ->
@@ -69,7 +131,7 @@ closeTermView maybeParentTermViewRef termViewRef model =
                 updatedTermViews
             }
           updatedTermViews =
-            model.termViews |> update parentTermViewRef.id updatedParentTermView
+            model.termViews |> Table.update parentTermViewRef.id updatedParentTermView
           updatedParentTermView =
             parentTermViewRef.get model.termViews |> Maybe.map updateParentTermView
           updateParentTermView (TermView parentTermView) =
@@ -82,31 +144,3 @@ closeTermView maybeParentTermViewRef termViewRef model =
 remove : a -> List a -> List a
 remove element list =
   list |> List.filter (\elem -> elem /= element)
-
-createTerm : String -> Update
-createTerm name model =
-  let result =
-        modelWithTerm |> openTermView Nothing termInserted.newReference
-      modelWithTerm =
-        { model |
-          terms <-
-            termInserted.newTable
-        }
-      termInserted =
-        model.terms |> insert (term name)
-  in result
-
-deleteTerm : Maybe (Reference TermView) -> Reference TermView -> Update
-deleteTerm maybeParentTermViewRef termViewRef model =
-  case termViewRef.get model.termViews of
-    Nothing ->
-      model
-    Just (TermView termViewInfo) ->
-      let result =
-            modelWithoutTerm |> closeTermView maybeParentTermViewRef termViewRef
-          modelWithoutTerm =
-            { model |
-              terms <-
-                model.terms |> Table.remove termViewInfo.term
-            }
-      in result

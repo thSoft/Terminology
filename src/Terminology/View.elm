@@ -3,9 +3,7 @@ module Terminology.View where
 import String
 import Dict exposing (Dict)
 import Signal exposing (Address)
-import Json.Decode as Decode
-import Result
-import Html exposing (Html)
+import Html exposing (Html, Attribute)
 import Html.Events as Events
 import Html.Attributes as Attributes
 import Table exposing (..)
@@ -13,7 +11,7 @@ import Terminology.Model exposing (..)
 import Terminology.Update exposing (..)
 import Combobox
 
-view : Address Update -> Model -> Html
+view : Address Action -> Model -> Html
 view address model =
   Html.div
     [
@@ -27,36 +25,30 @@ view address model =
       viewCommandInput address model
     ]
 
-viewTermViewRefs : Address Update -> Model -> Maybe (Reference TermView) -> List (Reference TermView) -> Html
+viewTermViewRefs : Address Action -> Model -> Maybe (Reference TermView) -> List (Reference TermView) -> Html
 viewTermViewRefs address model maybeParentTermViewRef termViewRefs =
   Html.dl
     []
     (termViewRefs |> List.map (viewTermViewRef address model maybeParentTermViewRef))
 
-viewTermViewRef : Address Update -> Model -> Maybe (Reference TermView) -> Reference TermView -> Html
+viewTermViewRef : Address Action -> Model -> Maybe (Reference TermView) -> Reference TermView -> Html
 viewTermViewRef address model maybeParentTermViewRef termViewRef =
   termViewRef.get model.termViews
   |> Maybe.map (viewTermView address model maybeParentTermViewRef termViewRef)
   |> Maybe.withDefault (Html.div [] [Html.text "Referenced term view not found!"])
 
-viewTermView : Address Update -> Model -> Maybe (Reference TermView) -> Reference TermView -> TermView -> Html
+viewTermView : Address Action -> Model -> Maybe (Reference TermView) -> Reference TermView -> TermView -> Html
 viewTermView address model maybeParentTermViewRef termViewRef (TermView termViewInfo) =
   termViewInfo.term.get model.terms
   |> Maybe.map (viewTerm address model maybeParentTermViewRef termViewRef (TermView termViewInfo))
   |> Maybe.withDefault (Html.div [] [Html.text "Referenced term not found!"])
 
-viewTerm : Address Update -> Model -> Maybe (Reference TermView) -> Reference TermView -> TermView -> Term -> Html
+viewTerm : Address Action -> Model -> Maybe (Reference TermView) -> Reference TermView -> TermView -> Term -> Html
 viewTerm address model maybeParentTermViewRef termViewRef (TermView termViewInfo) (Term termInfo) =
   let result =
         Html.div
           [
-            Attributes.style [
-              ("display", "table"),
-              ("padding", "5px"),
-              ("margin", "5px"),
-              ("border-radius", "2px"),
-              ("box-shadow", "0px 0px 2px 2px #aaaaaa")
-            ]
+            termViewStyle "table"
           ]
           [
             close,
@@ -76,7 +68,7 @@ viewTerm address model maybeParentTermViewRef termViewRef (TermView termViewInfo
           [
             Attributes.src "http://iconshow.me/media/images/Mixed/line-icon/png/16/trash-16.png",
             Attributes.title "Delete",
-            Events.onClick address (deleteTerm maybeParentTermViewRef termViewRef),
+            Events.onClick address (deleteTerm maybeParentTermViewRef termViewRef |> action),
             Attributes.style [
               ("float", "right")
             ]
@@ -87,13 +79,23 @@ viewTerm address model maybeParentTermViewRef termViewRef (TermView termViewInfo
           [
             Attributes.src "https://upload.wikimedia.org/wikipedia/commons/f/f8/Tooltip-CloseButton.png",
             Attributes.title "Close",
-            Events.onClick address (closeTermView maybeParentTermViewRef termViewRef),
+            Events.onClick address (closeTermView maybeParentTermViewRef termViewRef |> action),
             Attributes.style [
               ("float", "right")
             ]
           ]
           []
   in result
+
+termViewStyle : String -> Attribute
+termViewStyle display =
+  Attributes.style [
+    ("display", display),
+    ("padding", "5px"),
+    ("margin", "5px"),
+    ("border-radius", "2px"),
+    ("box-shadow", "0px 0px 2px 2px #aaaaaa")
+  ]
 
 viewName : String -> Html
 viewName name =
@@ -105,13 +107,13 @@ viewName name =
     ]
     [Html.text name]
 
-viewDefinition : Address Update -> Model -> Reference TermView -> Definition -> Html
+viewDefinition : Address Action -> Model -> Reference TermView -> Definition -> Html
 viewDefinition address model termViewRef definition =
   Html.dt
     []
     (definition |> List.map (viewSegment address model termViewRef))
 
-viewSegment : Address Update -> Model -> Reference TermView -> Segment -> Html
+viewSegment : Address Action -> Model -> Reference TermView -> Segment -> Html
 viewSegment address model termViewRef segment =
   case segment of
     Text text ->
@@ -119,7 +121,7 @@ viewSegment address model termViewRef segment =
     TermReference relatedTermRef ->
       let result =
             Html.a
-              [Events.onClick address (openTermView (Just termViewRef) relatedTermRef)]
+              [Events.onClick address (openTermView (Just termViewRef) relatedTermRef |> action)]
               [
                 Html.abbr
                   [
@@ -167,7 +169,7 @@ showRelatedTermName model relatedTermRef =
   |> Maybe.map .name
   |> Maybe.withDefault unknownTermLabel
 
-viewRelated : Address Update -> Model -> Reference TermView -> List (Reference TermView) -> Html
+viewRelated : Address Action -> Model -> Reference TermView -> List (Reference TermView) -> Html
 viewRelated address model parentTermViewRef related =
   let result =
         Html.div
@@ -186,7 +188,7 @@ viewRelated address model parentTermViewRef related =
         related |> viewTermViewRefs address model (Just parentTermViewRef)
   in result
 
-viewCommandInput : Address Update -> Model -> Html
+viewCommandInput : Address Action -> Model -> Html
 viewCommandInput address model =
   let result =
         Combobox.view comboboxAddress props model.commandInput
@@ -196,13 +198,15 @@ viewCommandInput address model =
         {
           items =
             model |> getItems address,
-          inputAttributes = [
-            Attributes.placeholder "Open or create term"
+          style =
+            Combobox.ContentEditable,
+          htmlAttributes = [
+            termViewStyle "inline"
           ]
         }
   in result
 
-getItems : Address Update -> Model -> List Combobox.Item
+getItems : Address Action -> Model -> List Combobox.Item
 getItems address model =
   let result =
         create ++ open
@@ -215,18 +219,18 @@ getItems address model =
           [
             {
               label =
-                "Create " ++ model.commandInput.inputText,
-              message =
-                Just (createTerm model.commandInput.inputText |> Signal.message address)
+                "Create “" ++ model.commandInput.inputText ++ "”",
+              task =
+                createTerm model.commandInput.inputText |> action |> Signal.send address
             }
           ]
       open =
         model.terms.rows |> Dict.toList |> List.map (\(id, Term termInfo) ->
           {
             label =
-              "Open " ++ termInfo.name,
-            message =
-              Just (openTermView Nothing (id |> reference) |> Signal.message address)
+              "Open “" ++ termInfo.name ++ "”",
+            task =
+              openTermView Nothing (id |> reference) |> action |> Signal.send address
           }
         )
   in result
