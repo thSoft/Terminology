@@ -209,7 +209,7 @@ viewCommandInput address model =
 getItems : Address Action -> Model -> List Combobox.Item
 getItems address model =
   let result =
-        create ++ open
+        open ++ create
       create =
         if model.terms.rows |> Dict.values |> List.any (\(Term termInfo) ->
           termInfo.name == model.commandInput.inputText
