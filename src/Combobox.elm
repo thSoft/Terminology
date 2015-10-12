@@ -11,7 +11,6 @@ import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Task exposing (Task)
-import Task.Extra
 import Effects exposing (Effects, Never)
 import Keyboard.Keys exposing (..)
 
@@ -82,9 +81,9 @@ choose item =
     updateState =
       setInputText True "",
     effects =
-      item.task
+      Task.sleep (50 * Time.millisecond) -- XXX to avoid race condition of tasks and rendering?
+      `Task.andThen` (\_ -> item.task)
       |> Task.map (\_ -> setInputText False "" |> action)
-      |> Task.Extra.delay (50 * Time.millisecond) -- XXX to avoid race condition of tasks and rendering?
       |> Effects.task
   }
 
